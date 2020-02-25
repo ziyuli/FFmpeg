@@ -374,6 +374,7 @@ OBJS-$(CONFIG_SCALE_VAAPI_FILTER)            += vf_scale_vaapi.o scale_eval.o va
 OBJS-$(CONFIG_SCALE_VULKAN_FILTER)           += vf_scale_vulkan.o vulkan.o
 OBJS-$(CONFIG_SCALE2REF_FILTER)              += vf_scale.o scale_eval.o
 OBJS-$(CONFIG_SCROLL_FILTER)                 += vf_scroll.o
+OBJS-$(CONFIG_SCROLL_BI_FILTER)              += vf_scroll_bi.o
 OBJS-$(CONFIG_SELECT_FILTER)                 += f_select.o
 OBJS-$(CONFIG_SELECTIVECOLOR_FILTER)         += vf_selectivecolor.o
 OBJS-$(CONFIG_SENDCMD_FILTER)                += f_sendcmd.o
@@ -458,6 +459,7 @@ OBJS-$(CONFIG_YADIF_CUDA_FILTER)             += vf_yadif_cuda.o vf_yadif_cuda.pt
 OBJS-$(CONFIG_YAEPBLUR_FILTER)               += vf_yaepblur.o
 OBJS-$(CONFIG_ZMQ_FILTER)                    += f_zmq.o
 OBJS-$(CONFIG_ZOOMPAN_FILTER)                += vf_zoompan.o
+OBJS-$(CONFIG_ZOOMPAN_BI_FILTER)             += vf_zoompan_bi.o
 OBJS-$(CONFIG_ZSCALE_FILTER)                 += vf_zscale.o
 
 OBJS-$(CONFIG_ALLRGB_FILTER)                 += vsrc_testsrc.o
