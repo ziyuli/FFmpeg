@@ -356,6 +356,7 @@ extern AVFilter ff_vf_scale_vaapi;
 extern AVFilter ff_vf_scale_vulkan;
 extern AVFilter ff_vf_scale2ref;
 extern AVFilter ff_vf_scroll;
+extern AVFilter ff_vf_scroll_bi;
 extern AVFilter ff_vf_select;
 extern AVFilter ff_vf_selectivecolor;
 extern AVFilter ff_vf_sendcmd;
@@ -436,6 +437,7 @@ extern AVFilter ff_vf_yadif_cuda;
 extern AVFilter ff_vf_yaepblur;
 extern AVFilter ff_vf_zmq;
 extern AVFilter ff_vf_zoompan;
+extern AVFilter ff_vf_zoompan_bi;
 extern AVFilter ff_vf_zscale;
 
 extern AVFilter ff_vsrc_allrgb;
