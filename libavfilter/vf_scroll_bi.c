@@ -72,7 +72,7 @@ static av_always_inline uint8_t lerp_u8(const uint8_t a, const uint8_t b, const 
 static inline __m128i _mm_lerp_ep16(const __m128i a, const __m128i b, const uint16_t w_u16) 
 {
     const __m128i w   = _mm_set1_epi16(w_u16);
-    const __m128i w_c = _mm_sub_epi16(_mm_set1_epi16(255), w);
+    const __m128i w_c = _mm_sub_epi16(_mm_set1_epi16(256), w);
     const __m128i lp  = _mm_add_epi16(_mm_mullo_epi16(a, w_c), _mm_mullo_epi16(b, w));
     return _mm_srli_epi16(lp, 8);
 }
@@ -85,8 +85,8 @@ static int scroll_bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int
     AVFrame *out = td->out;
     float w_h = td->h_interp;
     float w_v = td->v_interp;
-    uint16_t w_h_u16 = (uint16_t)(w_h * 255);
-    uint16_t w_v_u16 = (uint16_t)(w_v * 255);
+    uint16_t w_h_u16 = (uint16_t)(w_h * 256);
+    uint16_t w_v_u16 = (uint16_t)(w_v * 256);
 
     int yy, xx;
     int yy_inc, xx_inc;

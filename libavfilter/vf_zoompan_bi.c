@@ -226,8 +226,8 @@ static int zoom_slice(AVFilterContext *ctx, void *arg, int jobnr,
                         ixx = FFMIN(xx_int + 1, w);
                         iyy = FFMIN(yy_int + 1, h);
 
-                        h_interp_arr[i] = (xx - (int)xx) * 255;
-                        v_interp_arr[i] = (yy - (int)yy) * 255;
+                        h_interp_arr[i] = (xx - (int)xx) * 256;
+                        v_interp_arr[i] = (yy - (int)yy) * 256;
 
                         p0_arr[i] = (uint16_t)src[xx_int + yy_int * in->linesize[p]];
                         p1_arr[i] = (uint16_t)src[ixx + yy_int * in->linesize[p]];
@@ -238,8 +238,8 @@ static int zoom_slice(AVFilterContext *ctx, void *arg, int jobnr,
                     h_interp = _mm_load_si128((__m128i*)h_interp_arr);
                     v_interp = _mm_load_si128((__m128i*)v_interp_arr);
 
-                    __m128i h_interp_c = _mm_sub_epi16(_mm_set1_epi16(255), h_interp);
-                    __m128i v_interp_c = _mm_sub_epi16(_mm_set1_epi16(255), v_interp);
+                    __m128i h_interp_c = _mm_sub_epi16(_mm_set1_epi16(256), h_interp);
+                    __m128i v_interp_c = _mm_sub_epi16(_mm_set1_epi16(256), v_interp);
 
                     p0 = _mm_load_si128((__m128i*)p0_arr);
                     p1 = _mm_load_si128((__m128i*)p1_arr);
