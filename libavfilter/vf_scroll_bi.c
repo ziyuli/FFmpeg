@@ -146,7 +146,7 @@ static int scroll_bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int
                     interp_v_u16  = _mm_lerp_ep16(interp_h0_u16, interp_h1_u16, w_v_u16);
 
                     interp_v_u16 = _mm_packus_epi16(interp_v_u16, _mm_setzero_si128());
-                    _mm_storeu_si128((__m128i*)&dst[x + y * out->linesize[p]], interp_v_u16);
+                    _mm_storeu_si128((__m128i*)&dst[x], interp_v_u16);
 
                     // uint16_t *interp_v_u16_ptr = (uint16_t*)&interp_v_u16;
                     // for (int i = 0; i < 8; ++i) {
