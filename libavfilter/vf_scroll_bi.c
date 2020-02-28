@@ -162,7 +162,7 @@ static void scroll_bilinear(AVFilterContext *ctx, AVFrame *in, AVFrame *out)
     td.h_interp = h_interp; 
     td.v_interp = v_interp;
 
-    ctx->internal->execute(ctx, scroll_bilinear_slice, &td, NULL, FFMIN(out->height, 4));
+    ctx->internal->execute(ctx, scroll_bilinear_slice, &td, NULL, FFMIN(out->height, 8));
 
     s->h_pos += s->h_speed * in->width;
     s->v_pos += s->v_speed * in->height;
@@ -201,13 +201,17 @@ static int config_input(AVFilterLink *inlink)
     s->planewidth[1]  = s->planewidth[2]  = AV_CEIL_RSHIFT(inlink->w, s->desc->log2_chroma_w);
     s->planewidth[0]  = s->planewidth[3]  = inlink->w;
 
-    if (s->chroma > -1,
-        s->planeheight[0] == s->planeheight[1] && 
-        s->planeheight[0] == s->planeheight[2]) {
-        s->chroma = 1;
-    } else {
+    if (s->chroma == -1) {
+        // Force Interp. Only On Luma
         s->chroma = 0;
+    } else if (s->chroma == 0) {
+        // Auto 
+        if (s->planeheight[0] == s->planeheight[1] && 
+            s->planeheight[0] == s->planeheight[2]) {
+            s->chroma = 1;
+        }
     }
+
 
     s->h_pos = (1.f - s->h_ipos) * inlink->w;
     s->v_pos = (1.f - s->v_ipos) * inlink->h;

@@ -135,12 +135,15 @@ static int config_output(AVFilterLink *outlink)
     s->dsh = 1.0f / (1 << s->desc->log2_chroma_h);
     s->dsw = 1.0f / (1 << s->desc->log2_chroma_w);
 
-    if (s->chroma > -1 &&
-        s->planeheight[0] == s->planeheight[1] && 
-        s->planeheight[0] == s->planeheight[2]) {
-        s->chroma = 1;
-    } else {
+    if (s->chroma == -1) {
+        // Force Interp. Only On Luma
         s->chroma = 0;
+    } else if (s->chroma == 0) {
+        // Auto 
+        if (s->planeheight[0] == s->planeheight[1] && 
+            s->planeheight[0] == s->planeheight[2]) {
+            s->chroma = 1;
+        }
     }
 
     ret = av_expr_parse(&s->zoom_expr, s->zoom_expr_str, var_names, NULL, NULL, NULL, NULL, 0, ctx);
@@ -375,7 +378,7 @@ static int output_single_frame(AVFilterContext *ctx, AVFrame *in, double *var_va
     td.ww = ww;
     td.wh = wh;
     td.full_chroma = s->chroma;
-    ctx->internal->execute(ctx, zoom_slice, &td, NULL, FFMIN(4, ff_filter_get_nb_threads(ctx)));
+    ctx->internal->execute(ctx, zoom_slice, &td, NULL, FFMIN(8, ff_filter_get_nb_threads(ctx)));
 
     out->pts = pts;
     s->frame_count++;
