@@ -234,8 +234,8 @@ static int zoom_slice(AVFilterContext *ctx, void *arg, int jobnr,
                         xx_int = xx;
                         yy_int = yy;
 
-                        ixx = FFMIN(xx_int + 1, w);
-                        iyy = FFMIN(yy_int + 1, h);
+                        ixx = FFMIN(xx_int + 1, w - 1);
+                        iyy = FFMIN(yy_int + 1, h - 1);
 
                         h_interp_arr[i] = (xx - (int)xx) * 256;
                         v_interp_arr[i] = (yy - (int)yy) * 256;
@@ -283,8 +283,8 @@ static int zoom_slice(AVFilterContext *ctx, void *arg, int jobnr,
                     xx_int = xx;
                     yy_int = yy;
 
-                    ixx = FFMIN(xx_int + 1, w);
-                    iyy = FFMIN(yy_int + 1, h);
+                    ixx = FFMIN(xx_int + 1, w - 1);
+                    iyy = FFMIN(yy_int + 1, h - 1);
 
                     h_interp_f = fmodf(xx, 1);
                     v_interp_f = fmodf(yy, 1);
@@ -378,7 +378,7 @@ static int output_single_frame(AVFilterContext *ctx, AVFrame *in, double *var_va
     td.ww = ww;
     td.wh = wh;
     td.full_chroma = s->chroma;
-    ctx->internal->execute(ctx, zoom_slice, &td, NULL, FFMIN(8, ff_filter_get_nb_threads(ctx)));
+    ctx->internal->execute(ctx, zoom_slice, &td, NULL, FFMIN(out->height, ff_filter_get_nb_threads(ctx)));
 
     out->pts = pts;
     s->frame_count++;

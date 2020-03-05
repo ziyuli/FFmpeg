@@ -101,8 +101,8 @@ static int scroll_bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int
 
                     for (int by = 0; by < 2; by++) {
                         for (int bx = 0; bx < 2; bx++) {
-                            yy = FFMIN(y + by + s->pos_v[p], h);
-                            xx = FFMIN(x + bx + s->pos_h[p], w);
+                            yy = FFMIN(y + by + s->pos_v[p], h - 1);
+                            xx = FFMIN(x + bx + s->pos_h[p], w - 1);
                             pixels[bx + by * 2] = src[yy * in->linesize[p] + xx];
                         }
                     }
@@ -115,7 +115,7 @@ static int scroll_bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int
                 }
 
             } else {
-                yy = FFMIN(y + s->pos_v[p], h);
+                yy = FFMIN(y + s->pos_v[p], h - 1);
                 const uint8_t *ssrc = src + yy * in->linesize[p];
 
                 if (s->pos_h[p] < w)
@@ -162,7 +162,8 @@ static void scroll_bilinear(AVFilterContext *ctx, AVFrame *in, AVFrame *out)
     td.h_interp = h_interp; 
     td.v_interp = v_interp;
 
-    ctx->internal->execute(ctx, scroll_bilinear_slice, &td, NULL, FFMIN(out->height, 8));
+    ctx->internal->execute(ctx, scroll_bilinear_slice, &td, NULL, 
+        FFMIN(out->height, ff_filter_get_nb_threads(ctx)));
 
     s->h_pos += s->h_speed * in->width;
     s->v_pos += s->v_speed * in->height;
