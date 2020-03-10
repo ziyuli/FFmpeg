@@ -1,9 +1,4 @@
-#include <immintrin.h>
-#include <smmintrin.h>
-#include <tmmintrin.h>
-#include <emmintrin.h>
-#include <xmmintrin.h>
-
+#include "libavutil/x86/intrinsic.h"
 #include "libavutil/avassert.h"
 #include "libavutil/eval.h"
 #include "libavutil/opt.h"
@@ -13,6 +8,39 @@
 #include "formats.h"
 #include "internal.h"
 #include "video.h"
+
+#if HAVE_MMX_INTRINSIC
+#include <mmintrin.h>
+#endif
+
+#if HAVE_SSE_INTRINSIC
+#include <xmmintrin.h>
+#endif
+
+#if HAVE_SSE2_INTRINSIC
+#include <emmintrin.h>
+#endif
+
+#if HAVE_SSE3_INTRINSIC
+#include <pmmintrin.h>
+#endif
+
+#if HAVE_SSSE3_INTRINSIC
+#include <tmmintrin.h>
+#endif
+
+#if HAVE_SSE41_INTRINSIC
+#include <smmintrin.h>
+#endif
+
+#if HAVE_SSE42_INTRINSIC
+#include <nmmintrin.h>
+#endif
+
+#if HAVE_AVX_INTRINSIC
+#include <immintrin.h>
+#endif
+
 
 static const char *const var_names[] = {
     "in_w",   "iw",

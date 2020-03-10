@@ -442,6 +442,7 @@ Optimization options (experts only):
   --disable-neon           disable NEON optimizations
   --disable-inline-asm     disable use of inline assembly
   --disable-x86asm         disable use of standalone x86 assembly
+  --disable-intrinsic      disable use of intrinsic
   --disable-mipsdsp        disable MIPS DSP ASE R1 optimizations
   --disable-mipsdspr2      disable MIPS DSP ASE R2 optimizations
   --disable-msa            disable MSA optimizations
@@ -1109,6 +1110,25 @@ check_inline_asm(){
     test_cc "$@" <<EOF && enable $name
 void foo(void){ __asm__ volatile($code); }
 EOF
+}
+
+check_intrinsic_x86(){
+    log check_intrinsic "$@"
+    name="$1_intrinsic"
+    include="$2"
+    attr="av_intrinsic_$1"
+    type="$3"
+    code="$4"
+    shift 4
+    disable $name
+    {
+        cat "$source_path/libavutil/x86/intrinsic.h"
+        cat <<EOF
+
+#include <$include>
+$attr void foo($type *a, $type *b) { $code; }
+EOF
+    } | test_cc "$@" && enable $name
 }
 
 check_inline_asm_flags(){
@@ -2090,6 +2110,7 @@ HAVE_LIST_CMDLINE="
     inline_asm
     symver
     x86asm
+    intrinsic
 "
 
 HAVE_LIST_PUB="
@@ -2302,6 +2323,7 @@ HAVE_LIST="
     $ARCH_EXT_LIST
     $(add_suffix _external $ARCH_EXT_LIST)
     $(add_suffix _inline   $ARCH_EXT_LIST)
+    $(add_suffix _intrinsic $ARCH_EXT_LIST)
     $ARCH_FEATURES
     $BUILTIN_LIST
     $COMPLEX_FUNCS
@@ -3746,6 +3768,7 @@ enable safe_bitstream_reader
 enable static
 enable swscale_alpha
 enable valgrind_backtrace
+enable intrinsic
 
 sws_max_filter_size_default=256
 set_default sws_max_filter_size
@@ -5903,6 +5926,25 @@ EOF
     # check whether binutils is new enough to compile SSSE3/MMXEXT
     enabled ssse3  && check_inline_asm ssse3_inline  '"pabsw %xmm0, %xmm0"'
     enabled mmxext && check_inline_asm mmxext_inline '"pmaxub %mm0, %mm1"'
+
+    if enabled intrinsic; then
+      enabled mmx && check_intrinsic_x86 mmx mmintrin.h __m64 "*a = _mm_add_pi32(*a, *b)"
+      enabled mmxext && check_intrinsic_x86 mmxext xmmintrin.h __m64 "*a = _mm_max_pu8(*a, *b)"
+      enabled amd3dnow && check_intrinsic_x86 amd3dnow mm3dnow.h __m64 "*a = _m_pfadd(*a, *b)"
+      enabled amd3dnowext && check_intrinsic_x86 amd3dnowext mm3dnow.h __m64 "*a = _m_pfnacc(*a, *b)"
+      enabled sse && check_intrinsic_x86 sse xmmintrin.h __m128 "*a = _mm_add_ps(*a, *b)"
+      enabled sse2 && check_intrinsic_x86 sse2 emmintrin.h __m128d "*a = _mm_add_pd(*a, *b)"
+      enabled sse3 && check_intrinsic_x86 sse3 pmmintrin.h __m128 "*a = _mm_hadd_ps(*a, *b)"
+      enabled ssse3 && check_intrinsic_x86 ssse3 tmmintrin.h __m128i "*a = _mm_hadd_epi16(*a, *b)"
+      enabled sse4 && check_intrinsic_x86 sse4 smmintrin.h __m128 "*a = _mm_ceil_ps(*b)"
+      enabled sse42 && check_intrinsic_x86 sse42 smmintrin.h __m128i "*a = _mm_cmpistrm(*a, *b, 0)"
+      enabled avx && check_intrinsic_x86 avx immintrin.h __m256 "*a = _mm256_add_ps(*a, *b)"
+      enabled avx2 && check_intrinsic_x86 avx2 immintrin.h __m256i "*a = _mm256_add_epi8(*a, *b)"
+      enabled fma3 && check_intrinsic_x86 fma3 immintrin.h __m256 "*a = _mm256_fmadd_ps(*a, *b, *b)"
+      enabled fma4 && check_intrinsic_x86 fma4 x86intrin.h __m128 "*a = _mm_macc_ps(*a, *b, *b)"
+      enabled xop && check_intrinsic_x86 xop x86intrin.h __m128i "*a = _mm_macc_epi16(*a, *b, *a)"
+      enabled aesni && check_intrinsic_x86 aesni wmmintrin.h __m128i "*a = _mm_aesdec_si128(*a, *b)"
+    fi
 
     probe_x86asm(){
         x86asmexe_probe=$1

@@ -1,15 +1,42 @@
-#include <immintrin.h>
-#include <smmintrin.h>
-#include <tmmintrin.h>
-#include <emmintrin.h>
-#include <xmmintrin.h>
-
+#include "libavutil/x86/intrinsic.h"
 #include "libavutil/common.h"
 #include "libavutil/opt.h"
 #include "libavutil/pixdesc.h"
 #include "avfilter.h"
 #include "formats.h"
 #include "internal.h"
+
+#if HAVE_MMX_INTRINSIC
+#include <mmintrin.h>
+#endif
+
+#if HAVE_SSE_INTRINSIC
+#include <xmmintrin.h>
+#endif
+
+#if HAVE_SSE2_INTRINSIC
+#include <emmintrin.h>
+#endif
+
+#if HAVE_SSE3_INTRINSIC
+#include <pmmintrin.h>
+#endif
+
+#if HAVE_SSSE3_INTRINSIC
+#include <tmmintrin.h>
+#endif
+
+#if HAVE_SSE41_INTRINSIC
+#include <smmintrin.h>
+#endif
+
+#if HAVE_SSE42_INTRINSIC
+#include <nmmintrin.h>
+#endif
+
+#if HAVE_AVX_INTRINSIC
+#include <immintrin.h>
+#endif
 
 typedef struct ScrollBiContext {
     const AVClass *class;
@@ -61,12 +88,127 @@ static int query_formats(AVFilterContext *ctx)
 
 typedef struct ThreadData {
     AVFrame *in, *out;
-    float h_interp, v_interp;
+    uint8_t h_interp, v_interp;
 } ThreadData;
 
-static av_always_inline uint8_t lerp_u8(const uint8_t a, const uint8_t b, const float w) 
+static av_always_inline uint8_t lerp_u8(const uint8_t a, const uint8_t b, const uint8_t w) 
 {
-    return a * (1.0f - w) + b * w;
+    const uint16_t w16 = (uint16_t)w;
+    const uint16_t w16_ = 255 - w16;
+    return (a * w16_ + b * w16) >> 8;
+}
+
+av_always_inline void bilinear_block8x8_kernel_sse(const uint8_t w_h, const uint8_t w_v,
+    const uint8_t* restrict in_block, uint8_t* restrict out_block)
+{
+    __m128i i0 = _mm_setzero_si128();
+    __m128i i1 = _mm_setzero_si128();
+
+    __m128i pa0 = _mm_setzero_si128();
+    __m128i pa1 = _mm_setzero_si128();
+    __m128i pa2 = _mm_setzero_si128();
+    __m128i pa3 = _mm_setzero_si128();
+    __m128i pa4 = _mm_setzero_si128();
+    __m128i pa5 = _mm_setzero_si128();
+    __m128i pa6 = _mm_setzero_si128();
+    __m128i pa7 = _mm_setzero_si128();
+    __m128i pa8 = _mm_setzero_si128();
+
+    __m128i pb0 = _mm_setzero_si128();
+    __m128i pb1 = _mm_setzero_si128();
+    __m128i pb2 = _mm_setzero_si128();
+    __m128i pb3 = _mm_setzero_si128();
+    __m128i pb4 = _mm_setzero_si128();
+    __m128i pb5 = _mm_setzero_si128();
+    __m128i pb6 = _mm_setzero_si128();
+    __m128i pb7 = _mm_setzero_si128();
+    __m128i pb8 = _mm_setzero_si128();
+
+    __m128i pc0 = _mm_setzero_si128();
+    __m128i pc1 = _mm_setzero_si128();
+    __m128i pc2 = _mm_setzero_si128();
+    __m128i pc3 = _mm_setzero_si128();
+    __m128i pc4 = _mm_setzero_si128();
+    __m128i pc5 = _mm_setzero_si128();
+    __m128i pc6 = _mm_setzero_si128();
+    __m128i pc7 = _mm_setzero_si128();
+
+    __m128i w_h_i   = _mm_set1_epi16((uint16_t)w_h);
+    __m128i w_v_i   = _mm_set1_epi16((uint16_t)w_v);
+    __m128i w_h_c_i = _mm_set1_epi16(255 - (uint16_t)w_h);
+    __m128i w_v_c_i = _mm_set1_epi16(255 - (uint16_t)w_v);
+
+    _mm_prefetch(in_block, _MM_HINT_T0);
+    _mm_prefetch(in_block + 9 * 1, _MM_HINT_T0);
+    _mm_prefetch(in_block + 9 * 2, _MM_HINT_T0);
+    _mm_prefetch(in_block + 9 * 3, _MM_HINT_T0);
+    _mm_prefetch(in_block + 9 * 4, _MM_HINT_T0);
+    _mm_prefetch(in_block + 9 * 5, _MM_HINT_T0);
+    _mm_prefetch(in_block + 9 * 6, _MM_HINT_T0);
+    _mm_prefetch(in_block + 9 * 7, _MM_HINT_T0);
+    _mm_prefetch(in_block + 9 * 8, _MM_HINT_T0);
+
+    pa0 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block)));
+    pa1 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 9 * 1)));
+    pa2 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 9 * 2)));
+    pa3 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 9 * 3)));
+    pa4 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 9 * 4)));
+    pa5 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 9 * 5)));
+    pa6 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 9 * 6)));
+    pa7 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 9 * 7)));
+    pa8 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 9 * 8))); 
+
+    pb0 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 1)));
+    pb1 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 1 + 9 * 1)));
+    pb2 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 1 + 9 * 2)));
+    pb3 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 1 + 9 * 3)));
+    pb4 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 1 + 9 * 4)));
+    pb5 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 1 + 9 * 5)));
+    pb6 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 1 + 9 * 6)));
+    pb7 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 1 + 9 * 7)));
+    pb8 = _mm_cvtepu8_epi16(_mm_loadl_epi64((__m128i*)(in_block + 1 + 9 * 8)));
+
+    i0  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa0, w_h_c_i), _mm_mullo_epi16(pb0, w_h_i)), 8);
+    i1  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa1, w_h_c_i), _mm_mullo_epi16(pb1, w_h_i)), 8);
+    pc0 = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(i0, w_v_c_i), _mm_mullo_epi16(i1, w_v_i)), 8);
+
+    i0  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa1, w_h_c_i), _mm_mullo_epi16(pb1, w_h_i)), 8);
+    i1  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa2, w_h_c_i), _mm_mullo_epi16(pb2, w_h_i)), 8);
+    pc1 = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(i0, w_v_c_i), _mm_mullo_epi16(i1, w_v_i)), 8);
+
+    i0  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa2, w_h_c_i), _mm_mullo_epi16(pb2, w_h_i)), 8);
+    i1  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa3, w_h_c_i), _mm_mullo_epi16(pb3, w_h_i)), 8);
+    pc2 = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(i0, w_v_c_i), _mm_mullo_epi16(i1, w_v_i)), 8);
+
+    i0  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa3, w_h_c_i), _mm_mullo_epi16(pb3, w_h_i)), 8);
+    i1  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa4, w_h_c_i), _mm_mullo_epi16(pb4, w_h_i)), 8);
+    pc3 = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(i0, w_v_c_i), _mm_mullo_epi16(i1, w_v_i)), 8);
+
+    i0  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa4, w_h_c_i), _mm_mullo_epi16(pb4, w_h_i)), 8);
+    i1  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa5, w_h_c_i), _mm_mullo_epi16(pb5, w_h_i)), 8);
+    pc4 = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(i0, w_v_c_i), _mm_mullo_epi16(i1, w_v_i)), 8);
+
+    i0  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa5, w_h_c_i), _mm_mullo_epi16(pb5, w_h_i)), 8);
+    i1  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa6, w_h_c_i), _mm_mullo_epi16(pb6, w_h_i)), 8);
+    pc5 = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(i0, w_v_c_i), _mm_mullo_epi16(i1, w_v_i)), 8);
+
+    i0  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa6, w_h_c_i), _mm_mullo_epi16(pb6, w_h_i)), 8);
+    i1  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa7, w_h_c_i), _mm_mullo_epi16(pb7, w_h_i)), 8);
+    pc6 = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(i0, w_v_c_i), _mm_mullo_epi16(i1, w_v_i)), 8);
+
+    i0  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa7, w_h_c_i), _mm_mullo_epi16(pb7, w_h_i)), 8);
+    i1  = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(pa8, w_h_c_i), _mm_mullo_epi16(pb8, w_h_i)), 8);
+    pc7 = _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(i0, w_v_c_i), _mm_mullo_epi16(i1, w_v_i)), 8);
+
+    pc0 = _mm_packus_epi16(pc0, pc1);
+    pc1 = _mm_packus_epi16(pc2, pc3);
+    pc2 = _mm_packus_epi16(pc4, pc5);
+    pc3 = _mm_packus_epi16(pc6, pc7);
+
+    _mm_store_si128((void*)(out_block + 0),     pc0);
+    _mm_store_si128((void*)(out_block + 8 * 2), pc1);
+    _mm_store_si128((void*)(out_block + 8 * 4), pc2);
+    _mm_store_si128((void*)(out_block + 8 * 6), pc3);
 }
 
 static int scroll_bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs)
@@ -75,16 +217,16 @@ static int scroll_bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int
     ThreadData *td = arg;   
     AVFrame *in = td->in;
     AVFrame *out = td->out;
-    float w_h = td->h_interp;
-    float w_v = td->v_interp;
+    uint8_t w_h = td->h_interp;
+    uint8_t w_v = td->v_interp;
 
     int yy, xx;
-    int yy_inc, xx_inc;
 
     uint8_t interp_h0, interp_h1, interp_v;
     uint8_t pixels[4];
 
     for (int p = 0; p < s->nb_planes; p++) {
+
         const uint8_t *src = in->data[p];
         const int h = s->planeheight[p];
         const int w = s->planewidth[p] * s->bytes;
@@ -92,12 +234,65 @@ static int scroll_bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int
         const int slice_end = (h * (jobnr + 1)) / nb_jobs;
         uint8_t *dst = out->data[p] + slice_start * out->linesize[p];
 
-        for (int y = slice_start; y < slice_end; y++) {
+        if (s->chroma || p == 0 || p == 3) {
 
-            if (s->chroma || p == 0 || p == 3) {
+            const int32_t slices = slice_end - slice_start;
+            const int32_t y_nb = slices >> 3;
+            const int32_t y_leftover = slices - (y_nb << 3);
 
-                int x = 0;
-                for (; x < w; x++) {
+            uint8_t in_block[81] __attribute__((aligned(16))) = { 0 };
+            uint8_t out_block[64] __attribute__((aligned(16))) = { 0 };
+
+            for (int i = 0; i < y_nb; ++i) {
+
+                const int32_t x_nb = w >> 3;
+                const int32_t x_leftover = w - (x_nb << 3);
+
+                for (int j = 0; j < x_nb; ++j) {
+
+                    int y = (i << 3) + s->pos_v[p] + slice_start;
+                    int x = (j << 3) + s->pos_h[p];
+
+                    for (int k = 0; k < 9; ++k) {
+                        uint8_t* src_offset = src + FFMIN(y + k, h - 1) * in->linesize[p];
+                        uint8_t* in_offset = in_block + k * 9;
+                        memcpy(in_offset, src_offset + x, 8);
+                        in_offset[8] = src_offset[FFMIN(x + 8, w - 1)];
+                    }
+
+                    bilinear_block8x8_kernel_sse(w_h, w_v, in_block, out_block); 
+
+                    for (int k = 0; k < 8; ++k) {
+                        memcpy(dst + (j << 3) + (k + (i << 3)) * out->linesize[p], out_block + 8 * k, 8);
+                    }
+                }
+
+    			// x leftover
+    			for (int ii = 0; ii < 9; ++ii) {
+
+                    int y = FFMIN((i << 3) + ii + s->pos_v[p] + slice_start, h - 1);
+                    int x = FFMIN((x_nb << 3) + s->pos_h[p], w - 1);
+
+                    uint8_t* src_offset = src + y * in->linesize[p] + x;
+                    uint8_t* in_offset = in_block + ii * 9;
+
+                    memcpy(in_offset, src_offset, x_leftover);
+                    memset(in_offset + x_leftover, 0, 8 - x_leftover);
+                }
+
+                bilinear_block8x8_kernel_sse(w_h, w_v, in_block, out_block); 
+
+                for (int k = 0; k < 8; ++k) {
+                    memcpy(dst + (x_nb << 3) + (k + (i << 3)) * out->linesize[p], out_block + 8 * k, x_leftover);
+                }
+            } 
+
+            // y leftover
+            for (int i = 0; i < y_leftover; ++i) {
+                for (int j = 0; j < w; ++j) {
+
+                    int y = slice_start + (y_nb << 3) + i;
+                    int x = j;
 
                     for (int by = 0; by < 2; by++) {
                         for (int bx = 0; bx < 2; bx++) {
@@ -111,10 +306,12 @@ static int scroll_bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int
                     interp_h1 = lerp_u8(pixels[2], pixels[3], w_h);
                     interp_v  = lerp_u8(interp_h0, interp_h1, w_v);
                     
-                    dst[x] = interp_v;
+                    dst[x + ((y_nb << 3) + i) * out->linesize[p]] = interp_v;
                 }
+            } 
 
-            } else {
+        } else {
+            for (int y = slice_start; y < slice_end; y++) {
                 yy = FFMIN(y + s->pos_v[p], h - 1);
                 const uint8_t *ssrc = src + yy * in->linesize[p];
 
@@ -122,9 +319,9 @@ static int scroll_bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int
                     memcpy(dst, ssrc + s->pos_h[p], w - s->pos_h[p]);
                 if (s->pos_h[p] > 0)
                     memcpy(dst + w - s->pos_h[p], ssrc, s->pos_h[p]);
-            }
 
-            dst += out->linesize[p];
+                dst += out->linesize[p];
+            }
         }
     }
 
@@ -159,11 +356,13 @@ static void scroll_bilinear(AVFilterContext *ctx, AVFrame *in, AVFrame *out)
 
     td.in = in; 
     td.out = out;
-    td.h_interp = h_interp; 
-    td.v_interp = v_interp;
+    td.h_interp = (uint8_t)(h_interp * 255); 
+    td.v_interp = (uint8_t)(v_interp * 255);
+
+    int max_threads = ceil(out->height * 0.125f);
 
     ctx->internal->execute(ctx, scroll_bilinear_slice, &td, NULL, 
-        FFMIN(out->height, ff_filter_get_nb_threads(ctx)));
+        FFMIN(max_threads, ff_filter_get_nb_threads(ctx)));
 
     s->h_pos += s->h_speed * in->width;
     s->v_pos += s->v_speed * in->height;
