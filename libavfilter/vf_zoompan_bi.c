@@ -195,12 +195,14 @@ typedef struct ThreadData {
     int full_chroma;
 } ThreadData;
 
-static inline uint8_t _lerp_u8(const uint8_t a, const uint8_t b, const float w) 
+static av_always_inline uint8_t lerp_u8(const uint8_t a, const uint8_t b, const uint8_t w) 
 {
-    return a * (1 - w) + b * w;
+    const uint16_t w16 = (uint16_t)w;
+    const uint16_t w16_ = 255 - w16;
+    return (a * w16_ + b * w16) >> 8;
 }
 
-static inline __m128i _mm_lerp_ep16(const __m128i a, const __m128i b, const __m128i w, const __m128i w_c) 
+static av_always_inline __m128i _mm_lerp_ep16(const __m128i a, const __m128i b, const __m128i w, const __m128i w_c) 
 {
     const __m128i lp  = _mm_add_epi16(_mm_mullo_epi16(a, w_c), _mm_mullo_epi16(b, w));
     return _mm_srli_epi16(lp, 8);
@@ -224,6 +226,7 @@ static int zoom_slice(AVFilterContext *ctx, void *arg, int jobnr,
     int xx_int, yy_int;
 
     float h_interp_f, v_interp_f;
+    float h_interp_u8, v_interp_u8;
     uint8_t h_i0_u8, h_i1_u8, v_i_u8;
     uint8_t p0_u8, p1_u8, p2_u8, p3_u8;
 
@@ -314,17 +317,17 @@ static int zoom_slice(AVFilterContext *ctx, void *arg, int jobnr,
                     ixx = FFMIN(xx_int + 1, w - 1);
                     iyy = FFMIN(yy_int + 1, h - 1);
 
-                    h_interp_f = fmodf(xx, 1);
-                    v_interp_f = fmodf(yy, 1);
+                    h_interp_u8 = (uint8_t)(255 * xx) - 255;
+                    v_interp_u8 = (uint8_t)(255 * yy) - 255;
 
                     p0_u8 = src[xx_int + yy_int * in->linesize[p]];
                     p1_u8 = src[ixx + yy_int * in->linesize[p]];
                     p2_u8 = src[xx_int + iyy * in->linesize[p]];
                     p3_u8 = src[ixx + iyy * in->linesize[p]];
 
-                    h_i0_u8 = _lerp_u8(p0_u8, p1_u8, h_interp_f);
-                    h_i1_u8 = _lerp_u8(p2_u8, p3_u8, h_interp_f);
-                    v_i_u8  = _lerp_u8(h_i0_u8, h_i1_u8, v_interp_f);
+                    h_i0_u8 = lerp_u8(p0_u8, p1_u8, h_interp_u8);
+                    h_i1_u8 = lerp_u8(p2_u8, p3_u8, h_interp_u8);
+                    v_i_u8  = lerp_u8(h_i0_u8, h_i1_u8, v_interp_u8);
 
                     dst[i + x + y * out->linesize[p]] = v_i_u8;
                 } else {

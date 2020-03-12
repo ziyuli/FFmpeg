@@ -101,37 +101,10 @@ static av_always_inline uint8_t lerp_u8(const uint8_t a, const uint8_t b, const 
 av_always_inline void bilinear_block8x8_kernel_sse(const uint8_t w_h, const uint8_t w_v,
     const uint8_t* restrict in_block, uint8_t* restrict out_block)
 {
-    __m128i i0 = _mm_setzero_si128();
-    __m128i i1 = _mm_setzero_si128();
-
-    __m128i pa0 = _mm_setzero_si128();
-    __m128i pa1 = _mm_setzero_si128();
-    __m128i pa2 = _mm_setzero_si128();
-    __m128i pa3 = _mm_setzero_si128();
-    __m128i pa4 = _mm_setzero_si128();
-    __m128i pa5 = _mm_setzero_si128();
-    __m128i pa6 = _mm_setzero_si128();
-    __m128i pa7 = _mm_setzero_si128();
-    __m128i pa8 = _mm_setzero_si128();
-
-    __m128i pb0 = _mm_setzero_si128();
-    __m128i pb1 = _mm_setzero_si128();
-    __m128i pb2 = _mm_setzero_si128();
-    __m128i pb3 = _mm_setzero_si128();
-    __m128i pb4 = _mm_setzero_si128();
-    __m128i pb5 = _mm_setzero_si128();
-    __m128i pb6 = _mm_setzero_si128();
-    __m128i pb7 = _mm_setzero_si128();
-    __m128i pb8 = _mm_setzero_si128();
-
-    __m128i pc0 = _mm_setzero_si128();
-    __m128i pc1 = _mm_setzero_si128();
-    __m128i pc2 = _mm_setzero_si128();
-    __m128i pc3 = _mm_setzero_si128();
-    __m128i pc4 = _mm_setzero_si128();
-    __m128i pc5 = _mm_setzero_si128();
-    __m128i pc6 = _mm_setzero_si128();
-    __m128i pc7 = _mm_setzero_si128();
+    __m128i i0, i1;
+    __m128i pa0, pa1, pa2, pa3, pa4, pa5, pa6, pa7, pa8;
+    __m128i pb0, pb1, pb2, pb3, pb4, pb5, pb6, pb7, pb8;
+    __m128i pc0, pc1, pc2, pc3, pc4, pc5, pc6, pc7;
 
     __m128i w_h_i   = _mm_set1_epi16((uint16_t)w_h);
     __m128i w_v_i   = _mm_set1_epi16((uint16_t)w_v);
