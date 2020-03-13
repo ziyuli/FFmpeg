@@ -93,9 +93,9 @@ typedef struct ThreadData {
 
 static av_always_inline uint8_t lerp_u8(const uint8_t a, const uint8_t b, const uint8_t w) 
 {
-    const uint16_t w16 = (uint16_t)w;
-    const uint16_t w16_ = 255 - w16;
-    return (a * w16_ + b * w16) >> 8;
+    const uint16_t w16   = (uint16_t)w;
+    const uint16_t w16_c = 255 - w16;
+    return (a * w16_c + b * w16) >> 8;
 }
 
 av_always_inline void bilinear_block8x8_kernel_sse(const uint8_t w_h, const uint8_t w_v,
@@ -178,6 +178,11 @@ av_always_inline void bilinear_block8x8_kernel_sse(const uint8_t w_h, const uint
     pc2 = _mm_packus_epi16(pc4, pc5);
     pc3 = _mm_packus_epi16(pc6, pc7);
 
+    pc0 = _mm_adds_epu8(pc0, _mm_set1_epi8(3));
+    pc1 = _mm_adds_epu8(pc1, _mm_set1_epi8(3));
+    pc2 = _mm_adds_epu8(pc2, _mm_set1_epi8(3));
+    pc3 = _mm_adds_epu8(pc3, _mm_set1_epi8(3));
+
     _mm_store_si128((void*)(out_block + 0),     pc0);
     _mm_store_si128((void*)(out_block + 8 * 2), pc1);
     _mm_store_si128((void*)(out_block + 8 * 4), pc2);
@@ -193,9 +198,8 @@ static int scroll_bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int
     uint8_t w_h = td->h_interp;
     uint8_t w_v = td->v_interp;
 
-    int yy, xx;
-
-    uint8_t interp_h0, interp_h1, interp_v;
+    int     yy, xx;
+    uint8_t interp_i0, interp_i1, interp_i2;
     uint8_t pixels[4];
 
     for (int p = 0; p < s->nb_planes; p++) {
@@ -275,11 +279,12 @@ static int scroll_bilinear_slice(AVFilterContext *ctx, void *arg, int jobnr, int
                         }
                     }
 
-                    interp_h0 = lerp_u8(pixels[0], pixels[1], w_h);
-                    interp_h1 = lerp_u8(pixels[2], pixels[3], w_h);
-                    interp_v  = lerp_u8(interp_h0, interp_h1, w_v);
-                    
-                    dst[x + ((y_nb << 3) + i) * out->linesize[p]] = interp_v;
+                    interp_i0 = lerp_u8(pixels[0], pixels[1], w_h);
+                    interp_i1 = lerp_u8(pixels[2], pixels[3], w_h);
+                    interp_i2 = lerp_u8(interp_i0, interp_i1, w_v);
+                    interp_i2  = FFMIN((uint16_t)interp_i2 + 3, 255);
+
+                    dst[x + ((y_nb << 3) + i) * out->linesize[p]] = interp_i2;
                 }
             } 
 

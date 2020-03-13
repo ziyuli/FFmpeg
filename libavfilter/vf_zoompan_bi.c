@@ -199,7 +199,7 @@ static av_always_inline uint8_t lerp_u8(const uint8_t a, const uint8_t b, const 
 {
     const uint16_t w16 = (uint16_t)w;
     const uint16_t w16_ = 255 - w16;
-    return (a * w16_ + b * w16) >> 8;
+    return FFMIN(1 + ((a * w16_ + b * w16) >> 8), 255);
 }
 
 static av_always_inline __m128i _mm_lerp_ep16(const __m128i a, const __m128i b, const __m128i w, const __m128i w_c) 
@@ -221,8 +221,8 @@ static int zoom_slice(AVFilterContext *ctx, void *arg, int jobnr,
     int chroma = td->full_chroma;
 
     float xx, yy;
-    int ixx, iyy;
     int xx_int, yy_int;
+    int xx_inc_int, yy_inc_int;
 
     uint8_t h_interp_u8, v_interp_u8;
     uint8_t h_i0_u8, h_i1_u8, v_i_u8;
@@ -258,7 +258,7 @@ static int zoom_slice(AVFilterContext *ctx, void *arg, int jobnr,
                     yy = py[p] + y * v_step;
 
                     yy_int = yy;
-                    iyy = FFMIN(yy_int + 1, h - 1);
+                    yy_inc_int = FFMIN(yy_int + 1, h - 1);
 
                     v_interp_u16 = (yy - (int)yy) * 255;
                     v_interp     = _mm_set1_epi16(v_interp_u16);
@@ -267,30 +267,31 @@ static int zoom_slice(AVFilterContext *ctx, void *arg, int jobnr,
                     for (int i = 0; i < 8; ++i) {
                         xx = px[p] + (x + i) * h_step;
                         xx_int = xx;
-                        ixx = FFMIN(xx_int + 1, w - 1);
 
                         h_interp_arr[i] = (xx - (int)xx) * 255;
 
                         p01_arr[i] = (uint16_t)src[xx_int + yy_int * in->linesize[p]];
-                        p23_arr[i] = (uint16_t)src[xx_int + iyy * in->linesize[p]];
+                        p23_arr[i] = (uint16_t)src[xx_int + yy_inc_int * in->linesize[p]];
                     }
 
                     p01_arr[8] = (uint16_t)src[FFMIN(xx_int + 1, w - 1) + yy_int * in->linesize[p]];
-                    p23_arr[8] = (uint16_t)src[FFMIN(xx_int + 1, w - 1) + iyy * in->linesize[p]];
+                    p23_arr[8] = (uint16_t)src[FFMIN(xx_int + 1, w - 1) + yy_inc_int * in->linesize[p]];
 
                     h_interp = _mm_load_si128((__m128i*)h_interp_arr);
                     h_interp_c = _mm_sub_epi16(_mm_set1_epi16(255), h_interp);
 
                     p0 = _mm_load_si128((__m128i*)p01_arr);
                     p2 = _mm_load_si128((__m128i*)p23_arr);
-                    p1 = _mm_lddqu_si128((__m128i*)(p01_arr + 1));
-                    p3 = _mm_lddqu_si128((__m128i*)(p23_arr + 1));
+                    p1 = _mm_load_si128((__m128i*)(p01_arr + 1));
+                    p3 = _mm_load_si128((__m128i*)(p23_arr + 1));
 
                     h_i0 = _mm_lerp_ep16(p0, p1, h_interp, h_interp_c);
                     h_i1 = _mm_lerp_ep16(p2, p3, h_interp, h_interp_c);
                     v_i  = _mm_lerp_ep16(h_i0, h_i1, v_interp, v_interp_c);
 
                     v_i = _mm_packus_epi16(v_i, v_i);
+                    v_i = _mm_adds_epu8(v_i, _mm_set1_epi8(3));
+
                     _mm_storeu_si128((void*)&dst[x + y * out->linesize[p]], v_i);
 
                 } else {
@@ -312,20 +313,21 @@ static int zoom_slice(AVFilterContext *ctx, void *arg, int jobnr,
                     xx_int = xx;
                     yy_int = yy;
 
-                    ixx = FFMIN(xx_int + 1, w - 1);
-                    iyy = FFMIN(yy_int + 1, h - 1);
+                    xx_inc_int = FFMIN(xx_int + 1, w - 1);
+                    yy_inc_int = FFMIN(yy_int + 1, h - 1);
 
                     h_interp_u8 = (uint8_t)(255 * xx) - 255;
                     v_interp_u8 = (uint8_t)(255 * yy) - 255;
 
                     p0_u8 = src[xx_int + yy_int * in->linesize[p]];
-                    p1_u8 = src[ixx + yy_int * in->linesize[p]];
-                    p2_u8 = src[xx_int + iyy * in->linesize[p]];
-                    p3_u8 = src[ixx + iyy * in->linesize[p]];
+                    p1_u8 = src[xx_inc_int + yy_int * in->linesize[p]];
+                    p2_u8 = src[xx_int + yy_inc_int * in->linesize[p]];
+                    p3_u8 = src[xx_inc_int + yy_inc_int * in->linesize[p]];
 
                     h_i0_u8 = lerp_u8(p0_u8, p1_u8, h_interp_u8);
                     h_i1_u8 = lerp_u8(p2_u8, p3_u8, h_interp_u8);
                     v_i_u8  = lerp_u8(h_i0_u8, h_i1_u8, v_interp_u8);
+                    v_i_u8  = FFMIN((uint16_t)v_i_u8 + 3, 255);
 
                     dst[i + x + y * out->linesize[p]] = v_i_u8;
                 } else {
