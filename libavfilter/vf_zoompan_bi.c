@@ -204,8 +204,7 @@ static av_always_inline uint8_t lerp_u8(const uint8_t a, const uint8_t b, const 
 
 static av_always_inline __m128i _mm_lerp_ep16(const __m128i a, const __m128i b, const __m128i w, const __m128i w_c) 
 {
-    const __m128i lp  = _mm_add_epi16(_mm_mullo_epi16(a, w_c), _mm_mullo_epi16(b, w));
-    return _mm_srli_epi16(lp, 8);
+    return _mm_srli_epi16(_mm_add_epi16(_mm_mullo_epi16(a, w_c), _mm_mullo_epi16(b, w)), 8);
 }
 
 static int zoom_slice(AVFilterContext *ctx, void *arg, int jobnr,
@@ -225,21 +224,18 @@ static int zoom_slice(AVFilterContext *ctx, void *arg, int jobnr,
     int ixx, iyy;
     int xx_int, yy_int;
 
-    float h_interp_f, v_interp_f;
-    float h_interp_u8, v_interp_u8;
+    uint8_t h_interp_u8, v_interp_u8;
     uint8_t h_i0_u8, h_i1_u8, v_i_u8;
     uint8_t p0_u8, p1_u8, p2_u8, p3_u8;
+    uint16_t v_interp_u16;
 
-    __m128i h_interp, v_interp;
+    __m128i h_interp, v_interp, h_interp_c, v_interp_c;
     __m128i h_i0, h_i1, v_i;
     __m128i p0, p1, p2, p3;
 
     uint16_t h_interp_arr[8] __attribute__((aligned(16))) = {0, 0, 0, 0, 0, 0, 0, 0};
-    uint16_t v_interp_arr[8] __attribute__((aligned(16))) = {0, 0, 0, 0, 0, 0, 0, 0};
-    uint16_t p0_arr[8] __attribute__((aligned(16))) = {0, 0, 0, 0, 0, 0, 0, 0};
-    uint16_t p1_arr[8] __attribute__((aligned(16))) = {0, 0, 0, 0, 0, 0, 0, 0};
-    uint16_t p2_arr[8] __attribute__((aligned(16))) = {0, 0, 0, 0, 0, 0, 0, 0};
-    uint16_t p3_arr[8] __attribute__((aligned(16))) = {0, 0, 0, 0, 0, 0, 0, 0};
+    uint16_t p01_arr[9] __attribute__((aligned(16))) = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    uint16_t p23_arr[9] __attribute__((aligned(16))) = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     for (int p = 0; p < s->nb_planes; p++) {
         const uint8_t *src = in->data[p];
@@ -258,41 +254,43 @@ static int zoom_slice(AVFilterContext *ctx, void *arg, int jobnr,
 
                 if (chroma || p == 0 || p == 3) {
 
-                    for (int i = 0; i < 8; i++) {
-                        yy = py[p] + y * v_step;
+                    xx = px[p] + x * h_step;
+                    yy = py[p] + y * v_step;
+
+                    yy_int = yy;
+                    iyy = FFMIN(yy_int + 1, h - 1);
+
+                    v_interp_u16 = (yy - (int)yy) * 255;
+                    v_interp     = _mm_set1_epi16(v_interp_u16);
+                    v_interp_c   = _mm_set1_epi16(255 - v_interp_u16);
+
+                    for (int i = 0; i < 8; ++i) {
                         xx = px[p] + (x + i) * h_step;
-
                         xx_int = xx;
-                        yy_int = yy;
-
                         ixx = FFMIN(xx_int + 1, w - 1);
-                        iyy = FFMIN(yy_int + 1, h - 1);
 
-                        h_interp_arr[i] = (xx - (int)xx) * 256;
-                        v_interp_arr[i] = (yy - (int)yy) * 256;
+                        h_interp_arr[i] = (xx - (int)xx) * 255;
 
-                        p0_arr[i] = (uint16_t)src[xx_int + yy_int * in->linesize[p]];
-                        p1_arr[i] = (uint16_t)src[ixx + yy_int * in->linesize[p]];
-                        p2_arr[i] = (uint16_t)src[xx_int + iyy * in->linesize[p]];
-                        p3_arr[i] = (uint16_t)src[ixx + iyy * in->linesize[p]];
+                        p01_arr[i] = (uint16_t)src[xx_int + yy_int * in->linesize[p]];
+                        p23_arr[i] = (uint16_t)src[xx_int + iyy * in->linesize[p]];
                     }
 
+                    p01_arr[8] = (uint16_t)src[FFMIN(xx_int + 1, w - 1) + yy_int * in->linesize[p]];
+                    p23_arr[8] = (uint16_t)src[FFMIN(xx_int + 1, w - 1) + iyy * in->linesize[p]];
+
                     h_interp = _mm_load_si128((__m128i*)h_interp_arr);
-                    v_interp = _mm_load_si128((__m128i*)v_interp_arr);
+                    h_interp_c = _mm_sub_epi16(_mm_set1_epi16(255), h_interp);
 
-                    __m128i h_interp_c = _mm_sub_epi16(_mm_set1_epi16(256), h_interp);
-                    __m128i v_interp_c = _mm_sub_epi16(_mm_set1_epi16(256), v_interp);
-
-                    p0 = _mm_load_si128((__m128i*)p0_arr);
-                    p1 = _mm_load_si128((__m128i*)p1_arr);
-                    p2 = _mm_load_si128((__m128i*)p2_arr);
-                    p3 = _mm_load_si128((__m128i*)p3_arr);
+                    p0 = _mm_load_si128((__m128i*)p01_arr);
+                    p2 = _mm_load_si128((__m128i*)p23_arr);
+                    p1 = _mm_lddqu_si128((__m128i*)(p01_arr + 1));
+                    p3 = _mm_lddqu_si128((__m128i*)(p23_arr + 1));
 
                     h_i0 = _mm_lerp_ep16(p0, p1, h_interp, h_interp_c);
                     h_i1 = _mm_lerp_ep16(p2, p3, h_interp, h_interp_c);
                     v_i  = _mm_lerp_ep16(h_i0, h_i1, v_interp, v_interp_c);
 
-                    v_i = _mm_packus_epi16(v_i, _mm_setzero_si128());
+                    v_i = _mm_packus_epi16(v_i, v_i);
                     _mm_storeu_si128((void*)&dst[x + y * out->linesize[p]], v_i);
 
                 } else {
