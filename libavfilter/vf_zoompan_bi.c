@@ -126,7 +126,7 @@ static const AVOption zoompan_bi_options[] = {
     { "d", "set the duration expression", OFFSET(duration_expr_str), AV_OPT_TYPE_STRING, {.str="90"}, .flags = FLAGS },
     { "s", "set the output image size", OFFSET(w), AV_OPT_TYPE_IMAGE_SIZE, {.str="hd720"}, .flags = FLAGS },
     { "chroma", "set full chroma interpolation", OFFSET(chroma), AV_OPT_TYPE_INT, {.dbl=0}, -1, 1, .flags = FLAGS },
-    { "fps", "set the output framerate", OFFSET(framerate), AV_OPT_TYPE_VIDEO_RATE, { .str = "30" }, 0, INT_MAX, .flags = FLAGS },
+    { "fps", "set the output framerate", OFFSET(framerate), AV_OPT_TYPE_VIDEO_RATE, { .str = "25" }, 0, INT_MAX, .flags = FLAGS },
     { NULL }
 };
 
